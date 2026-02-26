@@ -1,0 +1,12 @@
+.github
+.npmrc
+.gitignore
+package-lock.json
+coverage/
+tests/
+node_modules/
+.markdownlintignore
+.markdownloint.yml
+jest.config.mjs
+eslint.config.mjs
+reports/

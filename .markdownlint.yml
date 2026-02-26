@@ -1,0 +1,12 @@
+# MD013 - Line length
+MD013: false
+# MD024 - Multiple headings with the same content
+MD024: false
+# MD020 - No space inside hashes on closed ATX style heading
+MD020: false
+# MD933 - Nonstandard rule ID (possible typo for MD033: Inline HTML)
+MD933: false
+# MD041 - First line in file should be a top level heading
+MD041: false
+# MD036 - Emphasis used instead of a heading
+MD036: false
