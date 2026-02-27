@@ -20,7 +20,7 @@ This tool renders Mermaid by spawning `mmdc` (Mermaid CLI), which typically runs
 
 If you must run on untrusted inputs, prefer running in a sandboxed environment (container/VM), with least privilege and restricted network egress.
 
-This package is **hardened by default** (resource limits + non-inherited child output). Use `--mode lax` or `--mode unsafe only for trusted local documents.
+This package is **hardened by default** (resource limits + non-inherited child output). Use `--mode lax` or `--mode unsafe` only for trusted local documents.
 
 ### Options
 
