@@ -4,12 +4,21 @@ import os from 'os';
 import crypto from 'crypto';
 import { spawn } from 'child_process';
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
 import sharp from 'sharp';
+import {
+  collectStream,
+  findPackageDirInNodeModules,
+  findPackageRootFromResolvedFile,
+  mergeOptions,
+  runWithConcurrency,
+} from './lib/helpers.js';
 
 export class MermaidRenderer {
-  constructor(documentPath, destinationPath = process.cwd()) {
+  constructor(documentPath, destinationPath = process.cwd(), options = {}) {
     this.documentPath = path.resolve(documentPath);
     this.destinationPath = path.resolve(destinationPath);
+    this.options = mergeOptions(options);
 
     if (!fs.existsSync(this.documentPath)) {
       throw new Error(`Document path does not exist: ${this.documentPath}`);
@@ -18,6 +27,12 @@ export class MermaidRenderer {
     const documentStat = fs.statSync(this.documentPath);
     if (!documentStat.isFile()) {
       throw new Error(`Document path is not a file: ${this.documentPath}`);
+    }
+
+    if (documentStat.size > this.options.maxFileBytes) {
+      throw new Error(
+        `Document is too large (${documentStat.size} bytes). Max allowed is ${this.options.maxFileBytes} bytes.`,
+      );
     }
 
     const ext = path.extname(this.documentPath).toLowerCase();
@@ -57,13 +72,27 @@ export class MermaidRenderer {
       const code = match[1].trim();
       blocks.push(code);
     }
+
+    if (blocks.length > this.options.maxBlocks) {
+      throw new Error(`Too many Mermaid blocks (${blocks.length}). Max allowed is ${this.options.maxBlocks}.`);
+    }
+
+    for (const block of blocks) {
+      const bytes = Buffer.byteLength(block, 'utf-8');
+      if (bytes > this.options.maxBlockBytes) {
+        throw new Error(
+          `Mermaid block is too large (${bytes} bytes). Max allowed is ${this.options.maxBlockBytes} bytes.`,
+        );
+      }
+    }
+
     return blocks;
   }
 
   async run() {
-   process.stdout.write(`Found ${this.blocks.length} Mermaid blocks in the document.\n`);
+    process.stdout.write(`Found ${this.blocks.length} Mermaid blocks in the document.\n`);
 
-    const tasks = this.blocks.map(async (block) => {
+    await runWithConcurrency(this.blocks, this.options.maxConcurrency, async (block) => {
       const id = crypto.randomUUID();
       const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `mermaid-${id}-`));
       const tempInputPath = path.join(tmpDir, `diagram-${id}.mmd`);
@@ -84,20 +113,48 @@ export class MermaidRenderer {
           tempSVGPath,
           outputPath,
           tempMermaidConfigurationPath,
+          this.options.backgroundColor,
+          this.options.scale,
         );
       } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true });
       }
     });
-
-    await Promise.all(tasks);
   }
 
   getMermaidDocumentBinaryPath() {
-    const require = createRequire(import.meta.url);
-    const mermaidCliPackageJsonPath = require.resolve('@mermaid-js/mermaid-cli/package.json');
-    const mermaidCliDir = path.dirname(mermaidCliPackageJsonPath);
-    const mermaidCliPkg = JSON.parse(fs.readFileSync(mermaidCliPackageJsonPath, 'utf-8'));
+    if (this.options.mmdcPath) {
+      const resolved = path.resolve(this.options.mmdcPath);
+      if (!fs.existsSync(resolved)) {
+        throw new Error(`mmdcPath does not exist: ${resolved}`);
+      }
+      return resolved;
+    }
+
+    // Avoid using Node's package "exports" resolution for subpaths; instead,
+    // locate the package.json directly via a node_modules search.
+    const startDir = path.dirname(fileURLToPath(import.meta.url));
+    const found =
+      findPackageDirInNodeModules('@mermaid-js/mermaid-cli', startDir)
+      ?? findPackageDirInNodeModules('@mermaid-js/mermaid-cli', process.cwd());
+
+    let mermaidCliDir;
+    let mermaidCliPkg;
+    if (found) {
+      mermaidCliDir = found.packageDir;
+      mermaidCliPkg = found.packageJson;
+    } else {
+      // Last-resort fallback if node_modules layout is unusual.
+      const require = createRequire(import.meta.url);
+      const resolved = require.resolve('sharp');
+      const rootInfo = findPackageRootFromResolvedFile(resolved, 'sharp');
+      const fromSharp = findPackageDirInNodeModules('@mermaid-js/mermaid-cli', rootInfo.packageDir);
+      if (!fromSharp) {
+        throw new Error('Unable to locate @mermaid-js/mermaid-cli package.json');
+      }
+      mermaidCliDir = fromSharp.packageDir;
+      mermaidCliPkg = fromSharp.packageJson;
+    }
 
     const bin = mermaidCliPkg?.bin;
     let binRelativePath;
@@ -129,24 +186,78 @@ export class MermaidRenderer {
       const command = isJavaScriptBinary ? process.execPath : mermaidDocumentBinaryPath;
       const commandArgs = isJavaScriptBinary ? [mermaidDocumentBinaryPath, ...args] : args;
 
+      const stdio = this.options.childOutput === 'inherit'
+        ? 'inherit'
+        : this.options.childOutput === 'ignore'
+          ? 'ignore'
+          : ['ignore', 'pipe', 'pipe'];
+
       const child = spawn(command, commandArgs, {
-        stdio: 'inherit',
+        stdio,
         windowsHide: true,
       });
 
+      const capturedStdout = this.options.childOutput === 'capture'
+        ? collectStream(child.stdout, { maxBytes: 64 * 1024 })
+        : null;
+      const capturedStderr = this.options.childOutput === 'capture'
+        ? collectStream(child.stderr, { maxBytes: 64 * 1024 })
+        : null;
+
+      let didTimeout = false;
+      const timeoutHandle = setTimeout(() => {
+        didTimeout = true;
+        try {
+          child.kill();
+        } catch {
+          // ignore
+        }
+      }, this.options.timeoutMs);
+
       child.on('error', (err) => {
+        clearTimeout(timeoutHandle);
         reject(err);
       });
       child.on('exit', async (code) => {
+        clearTimeout(timeoutHandle);
+
+        if (didTimeout) {
+          reject(new Error(`Mermaid document conversion timed out after ${this.options.timeoutMs}ms`));
+          return;
+        }
+
         if (code === 0) {
           try {
-            await this.convertSVGToPNG(svgOutputPath, pngOutputPath);
+            const svgStat = fs.statSync(svgOutputPath);
+            if (svgStat.size > this.options.maxSvgBytes) {
+              reject(
+                new Error(
+                  `Rendered SVG is too large (${svgStat.size} bytes). Max allowed is ${this.options.maxSvgBytes} bytes.`,
+                ),
+              );
+              return;
+            }
+
+            await this.convertSVGToPNG(
+              svgOutputPath,
+              pngOutputPath,
+              this.options.density,
+              this.options.maxWidth,
+            );
             resolve();
           } catch (err) {
             reject(err);
           }
         } else {
-          reject(new Error(`Mermaid document conversion failed with exit code ${code}`));
+          // Avoid leaking diagram content into logs. Provide a safe, high-level error.
+          const err = new Error(`Mermaid document conversion failed with exit code ${code}`);
+          if (this.options.childOutput === 'capture') {
+            err.cause = {
+              stdout: capturedStdout?.getText?.() ?? '',
+              stderr: capturedStderr?.getText?.() ?? '',
+            };
+          }
+          reject(err);
         }
       });
     });

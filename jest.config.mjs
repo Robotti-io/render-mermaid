@@ -9,6 +9,7 @@ export default {
     'index.js',
     'render-mermaid.js',
     'cli.js',
+    'lib/*.js',
     '!**/node_modules/**',
     '!**/tests/**',
     '!**/coverage/**',
