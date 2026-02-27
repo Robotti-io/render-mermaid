@@ -20,12 +20,12 @@ This tool renders Mermaid by spawning `mmdc` (Mermaid CLI), which typically runs
 
 If you must run on untrusted inputs, prefer running in a sandboxed environment (container/VM), with least privilege and restricted network egress.
 
-This package is **hardened by default** (resource limits + non-inherited child output). Use `--lax` only for trusted local documents.
+This package is **hardened by default** (resource limits + non-inherited child output). Use `--mode lax` or `--mode unsafe only for trusted local documents.
 
 ### Options
 
-- `--lax`: less strict limits intended for trusted local docs
 - `--verbose`: inherit Mermaid CLI stdout/stderr (may leak sensitive info into logs)
+- `--mode <string>`: base profile configuration [`hardened` (default), `lax`, `unsafe`]
 - `--max-concurrency <n>`: maximum concurrent renders
 - `--timeout-ms <ms>`: timeout per render
 - `--max-blocks <n>`: maximum Mermaid blocks allowed
