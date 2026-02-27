@@ -1,4 +1,4 @@
-#! /usr/bin/env node
+#!/usr/bin/env node
 import MermaidRenderer from "./render-mermaid.js";
 import { fileURLToPath, pathToFileURL } from 'url';
 import path from 'path';
