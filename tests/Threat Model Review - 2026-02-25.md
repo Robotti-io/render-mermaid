@@ -3,8 +3,8 @@
 ## 0. Executive summary
 
 - Primary risk is **rendering untrusted Mermaid/Markdown**: the tool spawns `mmdc` (Mermaid CLI) which typically uses headless Chromium; if run on untrusted content (e.g., CI on PRs), this raises **RCE / sandbox escape / DoS** concerns.
-- Primary supply-chain risk is **dependency compromise** (especially `@mermaid-js/mermaid-cli` and `sharp`) because this project executes/loads them locally ([package.json](package.json#L57-L60), [render-mermaid.js](render-mermaid.js#L5-L7)).
-- Strong baseline hygiene: input file existence/type checks and Markdown extension allow-list ([render-mermaid.js](render-mermaid.js#L14-L26)); temp directories are cleaned up in `finally` ([render-mermaid.js](render-mermaid.js#L74-L90)); outputs are random UUID-named, reducing overwrite/collision risk ([render-mermaid.js](render-mermaid.js#L67-L73)).
+- Primary supply-chain risk is **dependency compromise** (especially `@mermaid-js/mermaid-cli` and `sharp`) because this project executes/loads them locally ([package.json](../package.json#L57-L60), [render-mermaid.js](../render-mermaid.js#L5-L7)).
+- Strong baseline hygiene: input file existence/type checks and Markdown extension allow-list ([render-mermaid.js](../render-mermaid.js#L14-L26)); temp directories are cleaned up in `finally` ([render-mermaid.js](../render-mermaid.js#L74-L90)); outputs are random UUID-named, reducing overwrite/collision risk ([render-mermaid.js](../render-mermaid.js#L67-L73)).
 - Biggest unknown: whether you intend this to run **only on a developer workstation** (trusted docs) or in **automation on attacker-controlled docs** (PRs, issues, uploaded docs).
 - Next actions: clarify trust assumptions; document “safe usage” guidance; add guardrails if untrusted input is in-scope (sandbox, resource limits, network restrictions).
 
@@ -12,16 +12,16 @@
 
 ### In-scope components/containers
 
-- CLI entrypoint: [cli.js](cli.js#L1-L66)
-- Library entrypoint: [index.js](index.js#L1-L4)
-- Renderer implementation: [render-mermaid.js](render-mermaid.js#L1-L164)
+- CLI entrypoint: [cli.js](../cli.js#L1-L66)
+- Library entrypoint: [index.js](../index.js#L1-L4)
+- Renderer implementation: [render-mermaid.js](../render-mermaid.js#L1-L164)
 - Dependencies executed/loaded:
-  - `@mermaid-js/mermaid-cli` (invoked via `spawn`): [package.json](package.json#L57-L60), [render-mermaid.js](render-mermaid.js#L96-L153)
-  - `sharp` (native image processing): [package.json](package.json#L57-L60), [render-mermaid.js](render-mermaid.js#L155-L161)
+  - `@mermaid-js/mermaid-cli` (invoked via `spawn`): [package.json](../package.json#L57-L60), [render-mermaid.js](../render-mermaid.js#L96-L153)
+  - `sharp` (native image processing): [package.json](../package.json#L57-L60), [render-mermaid.js](../render-mermaid.js#L155-L161)
 
 ### Out-of-scope
 
-- Any external service/API, because none exist in this repo (this is a local CLI/library per [README.md](README.md#L11-L33)).
+- Any external service/API, because none exist in this repo (this is a local CLI/library per [README.md](../README.md#L11-L33)).
 - GitHub Actions/CI for this repo (no workflows found under `.github/workflows`).
 
 ### Trust boundaries
@@ -32,15 +32,15 @@
 
 ### Key assets (with sensitivity)
 
-- Input Markdown file contents (may include secrets/PII): **Confidential/Restricted** depending on user content ([render-mermaid.js](render-mermaid.js#L37-L38)).
-- Generated PNG files (may encode sensitive content): **Confidential/Restricted** depending on diagrams ([render-mermaid.js](render-mermaid.js#L67-L73)).
-- Temp directory contents (raw `.mmd`, config JSON, intermediate SVG): **Confidential** (contains diagram source and output) ([render-mermaid.js](render-mermaid.js#L68-L72), [render-mermaid.js](render-mermaid.js#L74-L90)).
+- Input Markdown file contents (may include secrets/PII): **Confidential/Restricted** depending on user content ([render-mermaid.js](../render-mermaid.js#L37-L38)).
+- Generated PNG files (may encode sensitive content): **Confidential/Restricted** depending on diagrams ([render-mermaid.js](../render-mermaid.js#L67-L73)).
+- Temp directory contents (raw `.mmd`, config JSON, intermediate SVG): **Confidential** (contains diagram source and output) ([render-mermaid.js](../render-mermaid.js#L68-L72), [render-mermaid.js](../render-mermaid.js#L74-L90)).
 - Local execution environment (developer machine / CI runner): **Restricted** (compromise impact is high).
 - Dependency integrity (`node_modules`): **Restricted**.
 
 ## 2. Assumptions & Unknowns
 
-- **ASSUMPTION:** This tool is primarily used **locally by developers** on their own Markdown files (per CLI/library examples in [README.md](README.md#L11-L33)).
+- **ASSUMPTION:** This tool is primarily used **locally by developers** on their own Markdown files (per CLI/library examples in [README.md](../README.md#L11-L33)).
 - **UNKNOWN:** Will this ever run on **untrusted input** (e.g., CI rendering docs from forks/PRs, web service wrapper, docs portal)?
   - Who can confirm: maintainer/release owner.
   - Question: “Do we render Mermaid from external contributors or uploaded files?”
@@ -90,10 +90,10 @@ child process]
 
 **Evidence**
 
-- CLI accepts input/output args and constructs renderer: [cli.js](cli.js#L21-L45)
-- Reads markdown and extracts Mermaid blocks: [render-mermaid.js](render-mermaid.js#L37-L61)
-- Creates temp directory/files, calls conversion, then deletes temp: [render-mermaid.js](render-mermaid.js#L63-L94)
-- Spawns `mmdc` and converts SVG->PNG using `sharp`: [render-mermaid.js](render-mermaid.js#L117-L161)
+- CLI accepts input/output args and constructs renderer: [cli.js](../cli.js#L21-L45)
+- Reads markdown and extracts Mermaid blocks: [render-mermaid.js](../render-mermaid.js#L37-L61)
+- Creates temp directory/files, calls conversion, then deletes temp: [render-mermaid.js](../render-mermaid.js#L63-L94)
+- Spawns `mmdc` and converts SVG->PNG using `sharp`: [render-mermaid.js](../render-mermaid.js#L117-L161)
 
 ### 3.2 DFD Level 1 (Subsystems / Containers)
 
@@ -147,10 +147,10 @@ via mermaid-cli]
 
 **Evidence**
 
-- Block extraction regex: [render-mermaid.js](render-mermaid.js#L52-L61)
-- Temp files and cleanup: [render-mermaid.js](render-mermaid.js#L67-L90)
-- Child process invocation: [render-mermaid.js](render-mermaid.js#L117-L135)
-- SVG->PNG conversion and optional resize: [render-mermaid.js](render-mermaid.js#L155-L161)
+- Block extraction regex: [render-mermaid.js](../render-mermaid.js#L52-L61)
+- Temp files and cleanup: [render-mermaid.js](../render-mermaid.js#L67-L90)
+- Child process invocation: [render-mermaid.js](../render-mermaid.js#L117-L135)
+- SVG->PNG conversion and optional resize: [render-mermaid.js](../render-mermaid.js#L155-L161)
 
 ### 3.3 Supporting diagrams
 
@@ -189,26 +189,26 @@ mmdc + Chromium]
 
 **Evidence**
 
-- Untrusted content source is the Markdown file read into memory: [render-mermaid.js](render-mermaid.js#L37-L38)
-- Boundary crossing occurs when spawning `mmdc`: [render-mermaid.js](render-mermaid.js#L132-L135)
+- Untrusted content source is the Markdown file read into memory: [render-mermaid.js](../render-mermaid.js#L37-L38)
+- Boundary crossing occurs when spawning `mmdc`: [render-mermaid.js](../render-mermaid.js#L132-L135)
 
 ## 4. Key Flows (ranked)
 
 1) **Render Mermaid blocks from local Markdown**
 - Description: Read Markdown, extract Mermaid blocks, render each to PNG.
 - Data elements: diagram text (potentially sensitive), intermediate SVG, final PNG.
-- Entry points: CLI args `inputPath`, `outputDir` ([cli.js](cli.js#L31-L46)).
-- Enforcement points: file exists/is file, extension allow-list (.md/.markdown) ([render-mermaid.js](render-mermaid.js#L14-L26)).
+- Entry points: CLI args `inputPath`, `outputDir` ([cli.js](../cli.js#L31-L46)).
+- Enforcement points: file exists/is file, extension allow-list (.md/.markdown) ([render-mermaid.js](../render-mermaid.js#L14-L26)).
 
 2) **Spawn and execute `mmdc` (mermaid-cli) on attacker-controlled diagram text**
 - Description: Write `.mmd` to temp directory and spawn `mmdc` to render SVG.
 - Data elements: `.mmd` and config JSON in temp directory.
-- Enforcement points: none specific to diagram content; diagram text is passed through verbatim ([render-mermaid.js](render-mermaid.js#L74-L87), [render-mermaid.js](render-mermaid.js#L117-L135)).
+- Enforcement points: none specific to diagram content; diagram text is passed through verbatim ([render-mermaid.js](../render-mermaid.js#L74-L87), [render-mermaid.js](../render-mermaid.js#L117-L135)).
 
 3) **Resolve `mmdc` binary path from installed dependency**
 - Description: Resolve `@mermaid-js/mermaid-cli/package.json`, read it, and determine the `bin` path.
 - Data elements: dependency metadata from `node_modules`.
-- Enforcement points: throws if bin path can’t be determined ([render-mermaid.js](render-mermaid.js#L110-L115)).
+- Enforcement points: throws if bin path can’t be determined ([render-mermaid.js](../render-mermaid.js#L110-L115)).
 
 ## 5. Threats
 
@@ -232,11 +232,11 @@ mmdc + Chromium]
 | T01 | Treat Mermaid input as untrusted; sandbox `mmdc` runtime when applicable | UNKNOWN | N/A | Confirm whether this is used in CI on untrusted docs; if yes, run in locked-down container/VM. |
 | T02 | Add resource limits (timeout per block; max blocks; max file size; optional max SVG size) | ABSENT | N/A | Consider exposing options in CLI/library (S/M effort depending on API decisions). |
 | T03 | Document/ensure “no network during render” (or run with network blocked) | UNKNOWN | N/A | If running in CI, prefer egress-restricted environment. |
-| T04 | Temp directory cleanup in `finally` | PRESENT | [render-mermaid.js](render-mermaid.js#L74-L90) | Residual risk remains on abrupt termination; consider temp-on-ramdisk if needed. |
-| T05 | Validate input path exists, is file, and is `.md/.markdown` | PRESENT | [render-mermaid.js](render-mermaid.js#L14-L26) | Output directory is not constrained; clarify intended behavior. |
-| T06 | Resolve `mmdc` from dependency instead of PATH | PRESENT | [render-mermaid.js](render-mermaid.js#L96-L115) | Still depends on `node_modules` integrity; add lockfile + CI SCA/SBOM for stronger posture. |
-| T09 | Child process output inherits stdio | PRESENT | [render-mermaid.js](render-mermaid.js#L132-L135) | Consider making stdio configurable for CI to avoid leaking content. |
-| T10 | Regex-based fenced block extraction for Mermaid | PRESENT | [render-mermaid.js](render-mermaid.js#L52-L61) | Doesn’t validate Mermaid syntax; relies on mmdc errors. |
+| T04 | Temp directory cleanup in `finally` | PRESENT | [render-mermaid.js](../render-mermaid.js#L74-L90) | Residual risk remains on abrupt termination; consider temp-on-ramdisk if needed. |
+| T05 | Validate input path exists, is file, and is `.md/.markdown` | PRESENT | [render-mermaid.js](../render-mermaid.js#L14-L26) | Output directory is not constrained; clarify intended behavior. |
+| T06 | Resolve `mmdc` from dependency instead of PATH | PRESENT | [render-mermaid.js](../render-mermaid.js#L96-L115) | Still depends on `node_modules` integrity; add lockfile + CI SCA/SBOM for stronger posture. |
+| T09 | Child process output inherits stdio | PRESENT | [render-mermaid.js](../render-mermaid.js#L132-L135) | Consider making stdio configurable for CI to avoid leaking content. |
+| T10 | Regex-based fenced block extraction for Mermaid | PRESENT | [render-mermaid.js](../render-mermaid.js#L52-L61) | Doesn’t validate Mermaid syntax; relies on mmdc errors. |
 
 ## 7. High-risk interaction sequences (top 2–3, tool-validated)
 
@@ -261,8 +261,8 @@ sequenceDiagram
 
 **Evidence**
 
-- CLI constructs renderer and calls `run`: [cli.js](cli.js#L39-L45)
-- File checks and read: [render-mermaid.js](render-mermaid.js#L14-L38)
+- CLI constructs renderer and calls `run`: [cli.js](../cli.js#L39-L45)
+- File checks and read: [render-mermaid.js](../render-mermaid.js#L14-L38)
 
 ### 7.2 Rendering a block (temp files → mmdc → sharp)
 
@@ -287,9 +287,9 @@ sequenceDiagram
 
 **Evidence**
 
-- Temp creation + writes + cleanup: [render-mermaid.js](render-mermaid.js#L67-L90)
-- Spawn and arguments: [render-mermaid.js](render-mermaid.js#L117-L135)
-- SVG->PNG with `sharp`: [render-mermaid.js](render-mermaid.js#L155-L161)
+- Temp creation + writes + cleanup: [render-mermaid.js](../render-mermaid.js#L67-L90)
+- Spawn and arguments: [render-mermaid.js](../render-mermaid.js#L117-L135)
+- SVG->PNG with `sharp`: [render-mermaid.js](../render-mermaid.js#L155-L161)
 
 ### 7.3 Resolving the `mmdc` binary from dependency metadata (supply-chain sensitive)
 
@@ -308,7 +308,7 @@ sequenceDiagram
 
 **Evidence**
 
-- Resolution and parsing logic: [render-mermaid.js](render-mermaid.js#L96-L115)
+- Resolution and parsing logic: [render-mermaid.js](../render-mermaid.js#L96-L115)
 
 ## 8. Validation plan (no code)
 

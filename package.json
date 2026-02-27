@@ -34,6 +34,7 @@
     "cli.js",
     "index.js",
     "index.d.ts",
+    "lib/",
     "render-mermaid.js",
     "LICENSE",
     "README.md"
